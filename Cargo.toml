@@ -1,0 +1,20 @@
+[package]
+name = "quasi-rd"
+version = "0.1.0"
+edition = "2018"
+license = "MIT"
+authors = ["Thomas Bénéteau <thomas@bitwise.me>"]
+description = "Generate quasirandom Rd sequences"
+readme = "README.md"
+categories = ["mathematics", "science"]
+keywords = ["mathematics", "quasirandom", "statistics"]
+repository = "https://github.com/TomCrypto/quasi-rd"
+
+[dependencies.num-bigint]
+version = "0.2"
+
+[dependencies.num-rational]
+version = "0.2"
+
+[dependencies.num-traits]
+version = "0.2"
