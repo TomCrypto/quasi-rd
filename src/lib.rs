@@ -43,34 +43,91 @@ impl Sequence {
         }
     }
 
-    /// Seeks to the given sample offset.
-    pub fn seek(&mut self, sample: u64) {
+    /// Seeks to the given sample offset. Starts at dimension 0 of the given sample.
+    pub fn seek_to(&mut self, sample: u64) {
         self.sample = sample;
         self.dimension = 0;
+    }
+    
+    /// Seeks a relative offset of samples. Starts at dimension 0 of the sample which is seeked to.
+    /// Performs a wrapping addition.
+    pub fn seek(&mut self, offset: u64) {
+        self.sample.wrapping_add(offset);
+        self.dimension = 0;
+    }
+    
+    /// Seeks to the given dimension within the current sample.
+    pub fn seek_to_dimension(&mut self, dimension: usize) {
+        assert!(dimension < self.dimensionality);
+        self.dimension = dimension;
+    }
+    
+    /// Seeks a relative offset of dimensions within the current sample.
+    pub fn seek_dimension(&mut self, offset: usize) {
+        let dimension = self.dimension + offset;
+        assert!(dimension < self.dimensionality);
+        self.dimension = dimension;
     }
 
     /// Generates the next sample dimension as a [0, 1) fixed-point value.
     pub fn next_u64(&mut self) -> u64 {
-        (1u64 << 63).wrapping_add(self.next_raw())
+        raw_to_u64(self.next_raw())
     }
 
     /// Generates the next sample dimension as a [0, 1) fixed-point value.
     pub fn next_u32(&mut self) -> u32 {
-        (1u32 << 31).wrapping_add(Self::shift_round(self.next_raw(), 32) as u32)
+        raw_to_u32(self.next_raw())
     }
 
     /// Generates the next sample dimension as a [0, 1) floating-point value.
     pub fn next_f64(&mut self) -> f64 {
-        (0.5 + f64::from_bits(0x3FF0_0000_0000_0000 | Self::shift_round(self.next_raw(), 12)))
-            .fract()
+        raw_to_f64(self.next_raw())
     }
 
     /// Generates the next sample dimension as a [0, 1) floating-point value.
     pub fn next_f32(&mut self) -> f32 {
-        (0.5 + f32::from_bits(0x3F80_0000 | Self::shift_round(self.next_raw(), 41) as u32)).fract()
+        raw_to_f32(self.next_raw())
     }
-
-    fn next_raw(&mut self) -> u64 {
+    
+    /// Fills the slice with the next sample dimensions in the sequence. Will wrap to dimensions of the next sample
+    /// after the current sample has been exhausted.
+    pub fn fill_with_samples_f32(&mut self, samples: &mut [f32]) {
+        for v in samples.iter_mut() {
+            *v = self.next_f32();
+        }
+    }
+    
+    /// Fills the slice with the next sample dimensions in the sequence. Will wrap to dimensions of the next sample
+    /// after the current sample has been exhausted.
+    pub fn fill_with_samples_f64(&mut self, samples: &mut [f64]) {
+        for v in samples.iter_mut() {
+            *v = self.next_f64();
+        }
+    }
+    
+    /// Fills the slice with the next sample dimensions in the sequence. Will wrap to dimensions of the next sample
+    /// after the current sample has been exhausted.
+    pub fn fill_with_samples_u32(&mut self, samples: &mut [u32]) {
+        for v in samples.iter_mut() {
+            *v = self.next_u32();
+        }
+    }
+    
+    /// Fills the slice with the next sample dimensions in the sequence. Will wrap to dimensions of the next sample
+    /// after the current sample has been exhausted.
+    pub fn fill_with_samples_u64(&mut self, samples: &mut [u64]) {
+        for v in samples.iter_mut() {
+            *v = self.next_u64();
+        }
+    }
+    
+    /// Get the raw bit pattern of the next dimension in the sequence. Note that this value
+    /// shouldn't be used directly as a numerical value. Use `raw_to_[u32/u64/f32/f64]` functions
+    /// to convert this value to a number.
+    ///
+    /// Getting the raw value is mostly useful for 'scrambling', where you would XOR the raw bit
+    /// pattern with a scramble value before converting it to a useable number.
+    pub fn next_raw(&mut self) -> u64 {
         let output = self.parameters[self.dimension].wrapping_mul(self.sample as u128);
 
         if self.dimension + 1 == self.dimensionality {
@@ -83,10 +140,55 @@ impl Sequence {
         (output >> 64) as u64
     }
 
-    fn shift_round(value: u64, n: u32) -> u64 {
-        (value + (1 << (n - 1))) >> n
-    }
+
 }
+
+fn shift_round(value: u64, n: u32) -> u64 {
+    (value + (1 << (n - 1))) >> n
+}
+
+/// Convert a raw sample bit pattern to an f32 in [0, 1).
+pub fn raw_to_f32(raw: u64) -> f32 {
+    (0.5 + f32::from_bits(0x3F80_0000 | shift_round(raw, 41) as u32)).fract()
+}
+
+/// Convert a raw sample bit pattern to an f64 in [0, 1).
+pub fn raw_to_f64(raw: u64) -> f64 {
+    (0.5 + f64::from_bits(0x3FF0_0000_0000_0000 | shift_round(raw, 12))).fract()
+}
+
+/// Convert a raw sample bit pattern to a 32-bit fixed-point number in [0, 1).
+pub fn raw_to_u32(raw: u64) -> u32 {
+    (1u32 << 31).wrapping_add(shift_round(raw, 32) as u32)
+}
+
+/// Convert a raw sample bit pattern to a 64-bit fixed-point number in [0, 1).
+pub fn raw_to_u64(raw: u64) -> u64 {
+    (1u64 << 63).wrapping_add(raw)
+}
+
+/// Scramble a raw sequence bit pattern with a scramble value and get the resulting f32 number in [0, 1).
+pub fn scramble_f32(raw: u64, scramble: u64) -> f32 {
+    raw_to_f32(raw ^ scramble)
+}
+
+/// Scramble a raw sequence bit pattern with a scramble value and get the resulting f32 number in [0, 1).
+pub fn scramble_f64(raw: u64, scramble: u64) -> f64 {
+    raw_to_f64(raw ^ scramble)
+}
+
+/// Scramble a raw sequence bit pattern with a scramble value and get the resulting
+/// 32-bit fixed-point number in [0, 1).
+pub fn scramble_u32(raw: u64, scramble: u64) -> u32 {
+    raw_to_u32(raw ^ scramble)
+}
+
+/// Scramble a raw sequence bit pattern with a scramble value and get the resulting
+/// 64-bit fixed-point number in [0, 1).
+pub fn scramble_u64(raw: u64, scramble: u64) -> u64 {
+    raw_to_u64(raw ^ scramble)
+}
+
 /// Populates a buffer with all parameters for a given dimensionality.
 ///
 /// If you intend to generate sequence samples yourself, the `i`th parameter in
