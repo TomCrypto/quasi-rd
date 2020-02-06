@@ -52,7 +52,7 @@ impl Sequence {
     /// Seeks a relative offset of samples. Starts at dimension 0 of the sample which is seeked to.
     /// Performs a wrapping addition.
     pub fn seek(&mut self, offset: u64) {
-        self.sample.wrapping_add(offset);
+        self.sample = self.sample.wrapping_add(offset);
         self.dimension = 0;
     }
     
@@ -124,9 +124,6 @@ impl Sequence {
     /// Get the raw bit pattern of the next dimension in the sequence. Note that this value
     /// shouldn't be used directly as a numerical value. Use `raw_to_[u32/u64/f32/f64]` functions
     /// to convert this value to a number.
-    ///
-    /// Getting the raw value is mostly useful for 'scrambling', where you would XOR the raw bit
-    /// pattern with a scramble value before converting it to a useable number.
     pub fn next_raw(&mut self) -> u64 {
         let output = self.parameters[self.dimension].wrapping_mul(self.sample as u128);
 
@@ -165,28 +162,6 @@ pub fn raw_to_u32(raw: u64) -> u32 {
 /// Convert a raw sample bit pattern to a 64-bit fixed-point number in [0, 1).
 pub fn raw_to_u64(raw: u64) -> u64 {
     (1u64 << 63).wrapping_add(raw)
-}
-
-/// Scramble a raw sequence bit pattern with a scramble value and get the resulting f32 number in [0, 1).
-pub fn scramble_f32(raw: u64, scramble: u64) -> f32 {
-    raw_to_f32(raw ^ scramble)
-}
-
-/// Scramble a raw sequence bit pattern with a scramble value and get the resulting f32 number in [0, 1).
-pub fn scramble_f64(raw: u64, scramble: u64) -> f64 {
-    raw_to_f64(raw ^ scramble)
-}
-
-/// Scramble a raw sequence bit pattern with a scramble value and get the resulting
-/// 32-bit fixed-point number in [0, 1).
-pub fn scramble_u32(raw: u64, scramble: u64) -> u32 {
-    raw_to_u32(raw ^ scramble)
-}
-
-/// Scramble a raw sequence bit pattern with a scramble value and get the resulting
-/// 64-bit fixed-point number in [0, 1).
-pub fn scramble_u64(raw: u64, scramble: u64) -> u64 {
-    raw_to_u64(raw ^ scramble)
 }
 
 /// Populates a buffer with all parameters for a given dimensionality.
